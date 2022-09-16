@@ -20,6 +20,8 @@ import androidx.preference.Preference.OnPreferenceChangeListener;
 import androidx.preference.SwitchPreference;
 import android.provider.Settings;
 import com.android.settings.R;
+import com.android.internal.util.octavi.PackageUtils;
+import com.android.internal.util.octavi.OctaviUtils;
 
 import com.octavi.lab.preferences.CustomSeekBarPreference;
 
@@ -36,10 +38,12 @@ public class MiscSettings extends SettingsPreferenceFragment implements
     private static final String SCROLLINGCACHE_PREF = "pref_scrollingcache";
     private static final String SCROLLINGCACHE_PERSIST_PROP = "persist.sys.scrollingcache";
     private static final String SCROLLINGCACHE_DEFAULT = "2";
+    private static final String NAVIGATION_BAR_RECENTS_STYLE = "navbar_recents_style";
 
     private ListPreference mScrollingCachePref;
     private CustomSeekBarPreference mPulseBrightness;
     private CustomSeekBarPreference mDozeBrightness;
+    private ListPreference mNavbarRecentsStyle;
 
     @Override
     public void onCreate(Bundle icicle) {
@@ -72,6 +76,13 @@ public class MiscSettings extends SettingsPreferenceFragment implements
                 Settings.System.OMNI_DOZE_BRIGHTNESS, defaultDoze);
         mDozeBrightness.setValue(value);
         mDozeBrightness.setOnPreferenceChangeListener(this);
+        mNavbarRecentsStyle = (ListPreference) findPreference(NAVIGATION_BAR_RECENTS_STYLE);
+        int recentsStyle = Settings.System.getInt(getContentResolver(),
+                Settings.System.OMNI_NAVIGATION_BAR_RECENTS, 0);
+
+        mNavbarRecentsStyle.setValue(Integer.toString(recentsStyle));
+        mNavbarRecentsStyle.setSummary(mNavbarRecentsStyle.getEntry());
+        mNavbarRecentsStyle.setOnPreferenceChangeListener(this);
     }
 
     @Override
@@ -92,9 +103,57 @@ public class MiscSettings extends SettingsPreferenceFragment implements
                 SystemProperties.set(SCROLLINGCACHE_PERSIST_PROP, (String) newValue);
             }
             return true;
+         } else if (preference == mNavbarRecentsStyle) {
+            int value = Integer.valueOf((String) newValue);
+            if (value == 1) {
+                if (!isOmniSwitchInstalled()){
+                    doOmniSwitchUnavail();
+                } else if (!OctaviUtils.isOmniSwitchRunning(getActivity())) {
+                    doOmniSwitchConfig();
+                }
+            }
+            int index = mNavbarRecentsStyle.findIndexOfValue((String) newValue);
+            mNavbarRecentsStyle.setSummary(mNavbarRecentsStyle.getEntries()[index]);
+            Settings.System.putInt(getContentResolver(), Settings.System.OMNI_NAVIGATION_BAR_RECENTS, value);
+            return true;
         }
         return false;
     }
+
+
+  private void checkForOmniSwitchRecents() {
+        if (!isOmniSwitchInstalled()){
+            doOmniSwitchUnavail();
+        } else if (!OctaviUtils.isOmniSwitchRunning(getActivity())) {
+            doOmniSwitchConfig();
+        }
+    }
+
+    private void doOmniSwitchConfig() {
+        AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(getActivity());
+        alertDialogBuilder.setTitle(R.string.omniswitch_title);
+        alertDialogBuilder.setMessage(R.string.omniswitch_dialog_running_new)
+            .setPositiveButton(R.string.omniswitch_settings, new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog,int id) {
+                    startActivity(OctaviUtils.INTENT_LAUNCH_APP);
+                }
+            });
+        AlertDialog alertDialog = alertDialogBuilder.create();
+        alertDialog.show();
+    }
+
+    private void doOmniSwitchUnavail() {
+        AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(getActivity());
+        alertDialogBuilder.setTitle(R.string.omniswitch_title);
+        alertDialogBuilder.setMessage(R.string.omniswitch_dialog_unavail);
+        AlertDialog alertDialog = alertDialogBuilder.create();
+        alertDialog.show();
+    }
+
+    private boolean isOmniSwitchInstalled() {
+        return PackageUtils.isAvailableApp(OctaviUtils.APP_PACKAGE_NAME, getActivity());
+    }
+
 
     @Override
     public int getMetricsCategory() {
